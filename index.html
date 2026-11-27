@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energy Direct Debit Calculator</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#202938;background:#f4f6f9}
+*{box-sizing:border-box}body{margin:0;padding:20px}.wrap{max-width:1100px;margin:auto}
+h1{font-size:1.8rem;margin:0 0 6px}h2{font-size:1.15rem;margin:0 0 14px}
+.sub{color:#5b6574;margin:0 0 20px}.panel{background:white;border:1px solid #e0e5ec;border-radius:13px;padding:18px;margin:15px 0;box-shadow:0 2px 8px #1522380a}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+label{display:block;font-size:.88rem;font-weight:600;margin:0 0 5px}
+input,select{width:100%;padding:10px;border:1px solid #cbd3df;border-radius:8px;font:inherit;background:white}
+input:focus,select:focus{outline:2px solid #9bbcf5;border-color:#4d83d9}
+.field{min-width:0}.fuel-title{display:flex;align-items:center;gap:9px;margin-bottom:12px;font-weight:700}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}.elec{background:#3478d4}.gas{background:#e28a35}
+.months{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.months .field label{font-size:.78rem;color:#566273}
+.hidden{display:none!important}.hint{font-size:.82rem;color:#657184;margin:8px 0 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button{border:0;border-radius:8px;padding:11px 17px;font:600  .95rem inherit;cursor:pointer;background:#245fb5;color:white}
+button.secondary{background:#e9edf3;color:#273548}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.metric{background:#f7f9fc;border-radius:10px;padding:14px}.metric small{display:block;color:#647084;margin-bottom:5px}.metric strong{font-size:1.35rem}
+.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.9rem;white-space:nowrap}
+th,td{text-align:right;padding:9px 10px;border-bottom:1px solid #e8ecf1}th:first-child,td:first-child{text-align:left}th{color:#596579;font-weight:650;background:#f8f9fb}
+canvas{width:100%;height:260px;display:block}.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:.85rem;color:#566273;margin:8px 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.note{font-size:.82rem;color:#647084;line-height:1.45}
+@media(max-width:600px){body{padding:12px}.panel{padding:14px}.months{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:1.45rem}canvas{height:220px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Energy Direct Debit Calculator</h1>
+<p class="sub">Estimate your monthly energy costs and account balance using seasonal usage profiles or your own monthly consumption.</p>
+
+<section class="panel">
+<h2>1. Tariff details</h2>
+<div class="grid">
+<div class="field"><label for="eRate">Electricity unit rate (p/kWh)</label><input id="eRate" type="number" min="0" step="0.01" value="24.5"></div>
+<div class="field"><label for="eStanding">Electricity standing charge (p/day)</label><input id="eStanding" type="number" min="0" step="0.01" value="60"></div>
+<div class="field"><label for="gRate">Gas unit rate (p/kWh)</label><input id="gRate" type="number" min="0" step="0.01" value="6.5"></div>
+<div class="field"><label for="gStanding">Gas standing charge (p/day)</label><input id="gStanding" type="number" min="0" step="0.01" value="31"></div>
+</div>
+</section>
+
+<section class="panel">
+<h2>2. Electricity consumption</h2>
+<div class="grid">
+<div class="field"><label for="eMode">Consumption method</label><select id="eMode"><option value="medium">Typical – medium</option><option value="low">Typical – low</option><option value="high">Typical – high</option><option value="custom">Enter my own monthly use</option></select></div>
+<div class="field"><label for="eAnnual">Annual consumption (kWh)</label><input id="eAnnual" type="number" readonly></div>
+</div>
+<div id="eCustom" class="hidden" style="margin-top:15px">
+<label>Enter electricity consumption for each month (kWh)</label>
+<div class="months" id="eMonths"></div>
+<p class="hint">Enter your expected electricity use for each month. Leave a month at zero if you expect no usage.</p>
+</div>
+</section>
+
+<section class="panel">
+<h2>3. Gas consumption</h2>
+<div class="grid">
+<div class="field"><label for="gMode">Consumption method</label><select id="gMode"><option value="medium">Typical – medium</option><option value="low">Typical – low</option><option value="high">Typical – high</option><option value="custom">Enter my own monthly use</option></select></div>
+<div class="field"><label for="gAnnual">Annual consumption (kWh)</label><input id="gAnnual" type="number" readonly></div>
+</div>
+<div id="gCustom" class="hidden" style="margin-top:15px">
+<label>Enter gas consumption for each month (kWh)</label>
+<div class="months" id="gMonths"></div>
+<p class="hint">Gas profiles are weighted towards winter, reflecting typical space-heating use.</p>
+</div>
+</section>
+
+
+<section class="panel">
+<h2>4. Solar export (optional)</h2>
+<div class="field" style="margin-bottom:12px">
+<label style="display:flex;align-items:center;gap:9px;font-weight:600">
+<input id="solarEnabled" type="checkbox" style="width:auto;transform:scale(1.15)">
+Include estimated solar export credits in the calculation
+</label>
+</div>
+<div id="solarSettings" class="hidden">
+<div class="grid" style="margin-bottom:14px">
+<div class="field"><label for="exportRate">Export rate (p/kWh)</label><input id="exportRate" type="number" min="0" step="0.01" value="12"></div>
+</div>
+<label>Estimated electricity exported each month (kWh)</label>
+<div class="months" id="solarMonths"></div>
+<p class="hint">Enter the amount of electricity you expect to export to the grid in each month. The calculator will credit this at the export rate entered above.</p>
+</div>
+</section>
+
+<section class="panel">
+<h2>5. Account and payment settings</h2>
+<div class="grid">
+<div class="field"><label for="startMonth">Starting month</label><select id="startMonth"></select></div>
+<div class="field"><label for="startBalance">Starting account balance (£)</label><input id="startBalance" type="number" step="0.01" value="0"><p class="hint">Positive = credit; negative = debt.</p></div>
+<div class="field"><label for="dd">Monthly direct debit (£)</label><input id="dd" type="number" min="0" step="0.01" value="180"></div>
+<div class="field"><label for="monthsAhead">Projection length</label><select id="monthsAhead"><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option></select></div>
+</div>
+<div class="actions"><button id="calculate">Calculate estimate</button><button class="secondary" id="reset" type="button">Reset example values</button></div>
+</section>
+
+<section class="panel">
+<h2>6. Estimated results</h2>
+<div class="results">
+<div class="metric"><small>Estimated annual energy cost</small><strong id="annualCost">—</strong></div>
+<div class="metric"><small>Average monthly cost</small><strong id="averageCost">—</strong></div>
+<div class="metric"><small>Suggested level direct debit</small><strong id="suggestedDD">—</strong></div>
+<div class="metric"><small>Projected closing balance</small><strong id="closingBalance">—</strong></div>
+</div>
+<p class="note" id="resultNote">The suggested direct debit covers the projected annual cost and spreads it evenly over 12 payments. Your chosen direct debit is used in the balance projection below.</p>
+</section>
+
+<section class="panel">
+<h2>Monthly energy costs and solar export credit</h2>
+<div class="legend"><span><i class="dot elec"></i> Electricity</span><span><i class="dot gas"></i> Gas</span><span><i class="dot" style="background:#27865a"></i> Solar export credit (below zero)</span></div>
+<canvas id="costChart" aria-label="Monthly electricity and gas cost chart"></canvas>
+</section>
+
+<section class="panel">
+<h2>Projected account balance</h2>
+<canvas id="balanceChart" aria-label="Projected energy account balance chart"></canvas>
+<p class="note">The projection assumes the same direct debit is paid each month and that the monthly costs follow the selected consumption profile. Standing charges are calculated using the actual number of days in each month.</p>
+</section>
+
+<section class="panel">
+<h2>Monthly breakdown</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Month</th><th>Electricity use</th><th>Gas use</th><th>Electricity cost</th><th>Gas cost</th><th>Export credit</th><th>Net cost</th><th>DD paid</th><th>Closing balance</th></tr></thead>
+<tbody id="breakdown"></tbody>
+</table></div>
+</section>
+<p class="note">This is an estimate, not a supplier bill. It excludes discounts, VAT adjustments beyond the rates entered, export payments, smart-tariff time bands, and changes in rates or consumption during the projection.</p>
+</div>
+<script>
+const names=['January','February','March','April','May','June','July','August','September','October','November','December'];
+// Illustrative profiles in kWh/month. Adjust the rates and usage to match your own household.
+const profiles={
+ electricity:{
+  low:[190,170,165,145,135,125,125,130,140,165,185,205],
+  medium:[280,250,240,210,195,180,180,190,205,235,265,290],
+  high:[420,380,360,320,295,275,275,285,310,355,400,440]
+ },
+ gas:{
+  low:[1050,900,800,500,250,100,70,70,180,500,800,1050],
+  medium:[1600,1400,1200,700,350,150,100,100,300,750,1250,1550],
+  high:[2300,2050,1750,1050,550,220,150,150,450,1100,1800,2250]
+ }
+};
+const $=id=>document.getElementById(id);
+function makeMonthInputs(prefix,container){
+ container.innerHTML='';
+ names.forEach((m,i)=>{
+  const d=document.createElement('div');d.className='field';
+  const l=document.createElement('label');l.htmlFor=prefix+i;l.textContent=m;
+  const inp=document.createElement('input');inp.type='number';inp.min='0';inp.step='1';inp.id=prefix+i;inp.value=profiles[prefix[0]==='e'?'electricity':'gas'].medium[i];
+  inp.addEventListener('input',calculate);
+  d.append(l,inp);container.append(d);
+ });
+}
+makeMonthInputs('eMonth',$('eMonths'));makeMonthInputs('gMonth',$('gMonths'));
+function makeSolarInputs(){
+ $('solarMonths').innerHTML='';
+ names.forEach((m,i)=>{
+  const d=document.createElement('div');d.className='field';
+  const l=document.createElement('label');l.htmlFor='solarMonth'+i;l.textContent=m;
+  const inp=document.createElement('input');inp.type='number';inp.min='0';inp.step='1';inp.id='solarMonth'+i;
+  inp.value=[20,25,45,65,75,80,85,75,55,35,20,15][i];
+  inp.addEventListener('input',calculate);
+  d.append(l,inp);$('solarMonths').append(d);
+ });
+}
+makeSolarInputs();
+names.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;$('startMonth').append(o)});
+$('startMonth').value=new Date().getMonth();
+function valuesFor(kind){
+ const mode=$(kind+'Mode').value;
+ if(mode==='custom')return names.map((_,i)=>Math.max(0,Number($(kind+'Month'+i).value)||0));
+ return profiles[kind==='e'?'electricity':'gas'][mode].slice();
+}
+function money(n){return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(n)}
+function fmt(n){return new Intl.NumberFormat('en-GB',{maximumFractionDigits:0}).format(n)}
+function daysInMonth(year,month){return new Date(year,month+1,0).getDate()}
+function getData(){
+ const e=valuesFor('e'),g=valuesFor('g');
+ $('eAnnual').value=fmt(e.reduce((a,b)=>a+b,0));$('gAnnual').value=fmt(g.reduce((a,b)=>a+b,0));
+ const er=Math.max(0,Number($('eRate').value)||0)/100,es=Math.max(0,Number($('eStanding').value)||0)/100;
+ const solarOn=$('solarEnabled').checked,exportRate=Math.max(0,Number($('exportRate').value)||0)/100;
+ const exports=names.map((_,i)=>solarOn?Math.max(0,Number($('solarMonth'+i).value)||0):0);
+ const gr=Math.max(0,Number($('gRate').value)||0)/100,gs=Math.max(0,Number($('gStanding').value)||0)/100;
+ const start=Number($('startMonth').value),year=new Date().getFullYear(),n=Number($('monthsAhead').value);
+ let balance=Number($('startBalance').value)||0;const dd=Math.max(0,Number($('dd').value)||0);
+ const rows=[];let totalCost=0;let endBalance=balance;
+ for(let j=0;j<n;j++){
+  const idx=(start+j)%12, y=year+Math.floor((start+j)/12),days=daysInMonth(y,idx);
+  const ec=e[idx]*er+days*es,gc=g[idx]*gr+days*gs,cost=ec+gc;
+  const exportCredit=exports[idx]*exportRate,netCost=cost-exportCredit;
+  balance+=dd-netCost;totalCost+=netCost;
+  rows.push({name:names[idx]+' '+y,e:e[idx],g:g[idx],ec,gc,cost,exportKwh:exports[idx],exportCredit,netCost,dd,balance});
+ }
+ endBalance=balance;
+ const annualE=e.reduce((a,b)=>a+b,0)*er+365*es;
+ const annualG=g.reduce((a,b)=>a+b,0)*gr+365*gs;
+ const annualExportCredit=exports.reduce((a,b)=>a+b,0)*exportRate;
+ return {e,g,rows,totalCost,endBalance,annualCost:annualE+annualG,annualExportCredit,dd,start,solarOn};
+}
+function drawBars(canvas,rows){
+ const ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;
+ canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+ const pad={l:48,r:12,t:14,b:42},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ const max=Math.max(1,...rows.map(r=>r.cost))*1.12;
+ const minExport=Math.max(0,...rows.map(r=>r.exportCredit||0))*1.2;
+ const totalRange=max+minExport;
+ ctx.strokeStyle='#e6eaf0';ctx.fillStyle='#657184';ctx.font='11px system-ui';
+ for(let k=0;k<=4;k++){let y=pad.t+ch*k/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(money(max-totalRange*k/4).replace('.00',''),4,y+4)}
+ const step=cw/rows.length,bw=Math.min(28,step*.62);
+ rows.forEach((r,i)=>{let x=pad.l+i*step+(step-bw)/2;let zeroY=pad.t+(max/totalRange)*ch;
+  let eh=r.ec/totalRange*ch,gh=r.gc/totalRange*ch,ex=(r.exportCredit||0)/totalRange*ch;
+  ctx.fillStyle='#3478d4';ctx.fillRect(x,zeroY-eh,bw,eh);
+  ctx.fillStyle='#e28a35';ctx.fillRect(x,zeroY-eh-gh,bw,gh);
+  if(ex>0){ctx.fillStyle='#27865a';ctx.fillRect(x,zeroY,bw,ex);}
+  if(rows.length<=12||i%2===0){ctx.fillStyle='#596579';ctx.textAlign='center';ctx.fillText(r.name.split(' ')[0].slice(0,3),x+bw/2,h-17)}
+ });
+}
+function drawBalance(canvas,rows,starting){
+ const ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;
+ canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+ const vals=[starting,...rows.map(r=>r.balance)],min=Math.min(0,...vals),max=Math.max(0,...vals),range=Math.max(1,max-min);
+ const pad={l:55,r:15,t:15,b:40},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+ ctx.font='11px system-ui';ctx.fillStyle='#657184';ctx.strokeStyle='#e6eaf0';
+ for(let k=0;k<=4;k++){const v=max-range*k/4,y=pad.t+ch*k/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(money(v).replace('.00',''),3,y+4)}
+ const y0=pad.t+(max/range)*ch;ctx.strokeStyle='#9aa5b4';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(pad.l,y0);ctx.lineTo(w-pad.r,y0);ctx.stroke();ctx.setLineDash([]);
+ ctx.strokeStyle='#27865a';ctx.lineWidth=2.5;ctx.beginPath();
+ vals.forEach((v,i)=>{const x=pad.l+(i/(vals.length-1))*cw,y=pad.t+((max-v)/range)*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+ vals.forEach((v,i)=>{const x=pad.l+(i/(vals.length-1))*cw,y=pad.t+((max-v)/range)*ch;ctx.fillStyle='#27865a';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()});
+ rows.forEach((r,i)=>{if(rows.length<=12||i%2===0){const x=pad.l+((i+1)/(vals.length-1))*cw;ctx.fillStyle='#596579';ctx.textAlign='center';ctx.fillText(r.name.split(' ')[0].slice(0,3),x,h-16)}});
+}
+function calculate(){
+ const d=getData(),start=Number($('startBalance').value)||0;
+ $('annualCost').textContent=money(d.annualCost);
+ $('averageCost').textContent=money(Math.max(0,(d.annualCost-d.annualExportCredit)/12));
+ $('solarCreditMetric')?.remove();
+ if(d.solarOn){
+  const metric=document.createElement('div');metric.className='metric';metric.id='solarCreditMetric';
+  metric.innerHTML='<small>Estimated annual solar export credit</small><strong>'+money(d.annualExportCredit)+'</strong>';
+  document.querySelector('.results').append(metric);
+ }
+ $('suggestedDD').textContent=money(Math.max(0,(d.annualCost-d.annualExportCredit)/12));
+ $('closingBalance').textContent=money(d.endBalance);
+ $('resultNote').textContent='Suggested direct debit is based on annual energy costs'+(d.solarOn?' less estimated solar export credits':'')+' divided by 12. The projection uses your entered direct debit of '+money(d.dd)+' per month, starting from a balance of '+money(start)+'.';
+ $('breakdown').innerHTML=d.rows.map(r=>`<tr><td>${r.name}</td><td>${fmt(r.e)} kWh</td><td>${fmt(r.g)} kWh</td><td>${money(r.ec)}</td><td>${money(r.gc)}</td><td>${money(r.exportCredit)}</td><td><strong>${money(r.netCost)}</strong></td><td>${money(r.dd)}</td><td>${money(r.balance)}</td></tr>`).join('');
+ drawBars($('costChart'),d.rows);drawBalance($('balanceChart'),d.rows,start);
+}
+function toggleCustom(kind){const custom=$(kind+'Mode').value==='custom';$(kind+'Custom').classList.toggle('hidden',!custom);calculate()}
+$('eMode').addEventListener('change',()=>toggleCustom('e'));$('gMode').addEventListener('change',()=>toggleCustom('g'));
+['eRate','eStanding','gRate','gStanding','startMonth','startBalance','dd','monthsAhead','exportRate'].forEach(id=>$(id).addEventListener('input',calculate));
+$('solarEnabled').addEventListener('change',()=>{$('solarSettings').classList.toggle('hidden',!$('solarEnabled').checked);calculate()});
+$('calculate').addEventListener('click',calculate);
+$('reset').addEventListener('click',()=>{
+ $('eRate').value=24.5;$('eStanding').value=60;$('gRate').value=6.5;$('gStanding').value=31;
+ $('solarEnabled').checked=false;$('solarSettings').classList.add('hidden');$('exportRate').value=12;
+ names.forEach((_,i)=>{$('solarMonth'+i).value=[20,25,45,65,75,80,85,75,55,35,20,15][i]});
+ $('eMode').value='medium';$('gMode').value='medium';$('startMonth').value=new Date().getMonth();$('startBalance').value=0;$('dd').value=180;$('monthsAhead').value=12;
+ names.forEach((_,i)=>{$('eMonth'+i).value=profiles.electricity.medium[i];$('gMonth'+i).value=profiles.gas.medium[i]});
+ $('eCustom').classList.add('hidden');$('gCustom').classList.add('hidden');calculate();
+});
+window.addEventListener('resize',calculate);
+calculate();
+</script>
+</body>
+</html>
